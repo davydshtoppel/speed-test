@@ -1,4 +1,4 @@
 .idea
 venv
 
-internet_speeds_dataset.csv
+*.csv

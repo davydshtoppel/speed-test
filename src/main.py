@@ -28,15 +28,12 @@ class Tester:
 
 class Storage:
 
-    def __init__(self, csv_file=None):
-        self.index = "Time"
-        self.header = ["Ping (ms)", "Download (Mb/s)", "Upload (Mb/s)"]
-        if csv_file is None:
-            self.csv_file_name = "internet_speeds_dataset.csv"
-        else:
-            self.csv_file_name = csv_file
+    def __init__(self, index: str, header: [], csv_file: str):
+        self.index = index
+        self.header = header
+        self.csv_file_name = csv_file
 
-    def load_data(self):
+    def load(self) -> DataFrame:
         # Load the CSV to update
         try:
             csv_dataset = read_csv(self.csv_file_name, index_col=self.index)
@@ -45,18 +42,18 @@ class Storage:
         except:
             csv_dataset = DataFrame(
                 list(),
-                columns=["Ping (ms)", "Download (Mb/s)", "Upload (Mb/s)"]
+                columns=self.header
             )
         return csv_dataset
 
-    def store(self, idx: str, ping: float, download_speed: float, upload_speed: float):
+    def store(self, index: str, row: []):
         # Get today's date in the form Month/Day/Year
-        csv_dataset = self.load_data()
+        csv_dataset = self.load()
         # Create a one-row DataFrame for the new test results
         results_df = DataFrame(
-            [[ping, download_speed, upload_speed]],
+            [row],
             columns=self.header,
-            index=[idx]
+            index=[index]
         )
 
         updated_df = csv_dataset.append(results_df, sort=False)
@@ -66,22 +63,45 @@ class Storage:
             .to_csv(self.csv_file_name, index_label=self.index)
 
 
-def measure():
+class PingStorage(Storage):
+
+    def __init__(self):
+        super().__init__("Time", ["Ping (ms)"], "internet_pings_dataset.csv")
+
+
+class SpeedStorage(Storage):
+
+    def __init__(self):
+        super().__init__("Time", ["Ping (ms)", "Download (Mb/s)", "Upload (Mb/s)"], "internet_speeds_dataset.csv")
+
+
+def ping_test():
     now = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
-    print('%s: Starting measure' % now)
+    print('%s: Starting ping test' % now)
+    ping_ms = tester.ping()
+    pings.store(now, [ping_ms])
+    print('%s: Ping test finished. Ping=[%s]ms' % (datetime.today().strftime("%Y.%m.%d %H:%M:%S"), ping_ms))
+    sched.enter(20, 1, ping_test, ())
+
+
+def speed_test():
+    now = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+    print('%s: Starting speed test' % now)
     ping_ms = tester.ping()
     download_mbs = tester.download()
     upload_mbs = tester.upload()
-    storage.store(now, ping_ms, download_mbs, upload_mbs)
-    print('%s: Measuring finished. Ping=[%s]ms, download=[%s]mb/s, upload=[%s]mb/s' %
+    speeds.store(now, [ping_ms, download_mbs, upload_mbs])
+    print('%s: Speed test finished. Ping=[%s]ms, download=[%s]mb/s, upload=[%s]mb/s' %
           (datetime.today().strftime("%Y.%m.%d %H:%M:%S"), ping_ms, download_mbs, upload_mbs))
-    sched.enter(120, 1, measure, ())
+    sched.enter(120, 2, speed_test, ())
 
 
 if __name__ == '__main__':
     tester = Tester()
-    storage = Storage()
+    pings = PingStorage()
+    speeds = SpeedStorage()
 
     sched = scheduler(time, sleep)
-    sched.enter(1, 1, measure, ())
+    sched.enter(1, 1, ping_test, ())
+    sched.enter(10, 2, speed_test, ())
     sched.run()
